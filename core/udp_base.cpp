@@ -74,8 +74,59 @@ void UdpBase::recv_start() {
 			}
 			printf("recv str:%s\n", (char*)recv_upd_pack.data );
 			this->save_addr(clent_addr, recv_upd_pack.from_id);
+			if (recv_upd_pack->task == _TASK_LOGIN_) {	//登录保存from_id
+				recv_upd_pack->task = _TASK_BACK_LOGIN_;
+				this->send_data(recv_upd_pack, clent_addr);	//登录成功
+				continue;
+			}
+			if (recv_upd_pack->task == _TASK_LOGIN_SUCCESS_ || recv_upd_pack->task == _TASK_LOGIN_FAIL_) {	//登录保存from_id
+				this->recvfrom(NULL, 0, recv_upd_pack->task, 0x00, recv_upd_pack->task, recv_upd_pack->type);
+				Exception::save_info(loign status);
+				continue;
+			}
+			if (recv_upd_pack->task == _TASK_QUITE_) {	//退出登录
+				this->remove_socket_addr(recv_upd_pack->from_id);
+				recv_upd_pack->task = _TASK_BACK_QUITE_;
+				this->send_data(recv_upd_pack, clent_addr);	//登录成功
+				continue;
+			}
+			if (recv_upd_pack->task == _TASK_BACK_QUITE_) {	//退出登录
+				this->recvfrom(NULL, 0, recv_upd_pack->task, 0x00, recv_upd_pack->task, recv_upd_pack->type);
+				Exception::save_info("loign status");
+				continue;
+			}
+			if (recv_upd_pack->task == _TASK_GET_ADDR_) {
+				struct udp_addr *addr_info = this->get_socket_addr(recv_upd_pack->send_id);
+				recv_upd_pack->task = _TASK_BACK_ADDR_;
+				memset(recv_upd_pack->data, 0x00, _UDP_DATA_SIZE_);
+				memcpy(recv_upd_pack->data, addr_info->addr, sizeof(struct sockaddr_in));
+				this->send_data(recv_upd_pack, clent_addr);	//登录成功
+				// save_addr
+			}
+
+
+			if (this->read_type ==  0x00) {	//立即回调
+				this->recvfrom(&recv_upd_pack, clent_addr);
+			} else if (this->read_type ==  0x01) {
+
+			}
 		}
+
 	}
+}
+
+void UdpBase::recvfrom(struct udp_pack*, struct sockaddr_in addr) { //立即回调函数,针对服务端
+
+}
+void UdpBase::recvfrom(uint8 *data, uint32 data_size, uint16 task, uint32 userid) { //接受到完整数据回调,正对client 端
+
+}
+int UdpBase::send_data(struct udp_pack* pack_data, struct sockaddr_in addr) {
+	pthread_mutex_lock(&(this->send_mutex));
+	this->sendTo(pack_data, addr);
+	pthread_mutex_unlock(&(this->send_mutex));
+	pthread_cond_signal(&(this->send_cond));
+	return 1;
 }
 int UdpBase::send_data(void *send_data, int data_size, uint32 send_id, uint16 task, uint8 type) {
 
@@ -144,21 +195,6 @@ int UdpBase::send_data(void *send_data, int data_size, uint32 send_id, uint16 ta
 	return this->task_queue;
 }
 
-// void UdpBase::test() {
-// 	std::map<uint32, std::map<uint64, struct udp_pack*> >::iterator send_map_list_iter1;
-// 	std::map<uint64, struct udp_pack*> send_user_map1;
-// 	std::map<uint64, struct udp_pack*>::iterator send_user_map1_iter;
-// 	for (send_map_list_iter1 =  this->send_map_list.begin(); send_map_list_iter1 != this->send_map_list.end(); ) {
-// 		printf("uid:%d\n", send_map_list_iter1->first);
-// 		send_user_map1 = send_map_list_iter1->second;
-// 		for (send_user_map1_iter = send_user_map1.begin(); send_user_map1_iter != send_user_map1.end();) {
-// 			printf("----uid64:%ld\n", send_user_map1_iter->first);
-// 			++send_user_map1_iter;
-// 		}
-// 		++send_map_list_iter1;
-// 	}
-// }
-
 
 int UdpBase::create_available_pack(int len) {
 	for (int i = 0; i < len; ++i) {
@@ -189,7 +225,8 @@ int UdpBase::save_available_pack(struct udp_pack* pack) {
 
 
 
-void UdpBase::create_read_thread() {
+void UdpBase::create_read_thread(uint8 type) {
+	this->read_type = type;
 	this->read_thread_status = _THREAD_RUN_ ;	//读线程状态
 	pthread_create(&(this->read_thread_id), NULL, read_thread_function, (void *)this);
 }
@@ -239,8 +276,11 @@ struct udp_addr *UdpBase::get_socket_addr(uint32 userId) {
 	if (users_addr_map_iter != this->users_addr_map.end()) {
 		return users_addr_map_iter->second;
 	}
-
 	return NULL;
+}
+//删除用户的addr
+void UdpBase::remove_socket_addr(uint32 userId) {
+
 }
 
 /**

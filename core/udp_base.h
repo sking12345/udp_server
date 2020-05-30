@@ -26,6 +26,7 @@ class UdpBase {
 	uint32 task_queue;
 	uint32 wait_send_queue;		//未发送成功的任务队列
 	uint32 from_user_id;		//服务端 0x00
+	uint8 read_type;
 	pthread_t read_thread_id;	//读数据线程
 	pthread_t send_thread_id;	//写数据线程
 	pthread_mutex_t send_mutex; //互斥信号量
@@ -49,15 +50,19 @@ class UdpBase {
 	int create_available_pack(int len);	//创建可用包队列
 	struct udp_pack *get_available_pack();	//获取可用包
 	int save_available_pack(struct udp_pack*);	//存入一个可用包,用于当数据确认接受完毕后,将数据清0x00，存入可用队列中
-	void create_read_thread();	//开始创建读线程
+	void create_read_thread(uint8 type = 0x00);	//开始创建读线程 type:0x00 包立即回调 0x01 完整包回调 0x02: 立即回调及完整包回调
 	void create_send_thread();	//开始创建写线程
 	void save_addr(struct sockaddr_in, uint32 );
 	int send_data(void*, int size, uint32 userid, uint16 task, uint8 type);
+	int send_data(struct udp_pack* pack_data, struct sockaddr_in addr);	//发送数据,
 	uint64 get_mstime();
 	int sendTo(struct udp_pack*, struct sockaddr_in addr);	//发送数据,
 	struct udp_addr *get_socket_addr(uint32);
 	void send_time_out(uint16 unique, uint8 task, uint8 type);	//发送超时回调
 	void recv_start();
+	void recvfrom(struct udp_pack*, struct sockaddr_in addr);		//立即回调函数
+	void recvfrom(uint8 *data, uint32 data_size, uint16 task, uint32 userid);	//接受到完整数据回调
+	void remove_socket_addr(uint32 userId);
 
 };
 #endif

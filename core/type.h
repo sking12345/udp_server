@@ -24,7 +24,6 @@ typedef long int            uint64;
 
 #define _OVER_SEND_TIME_ 500  //发送超时，
 
-
 #define _VERSION_ 0x01
 #define _MAX_TASK_LIST_ 500	//最大发送任务队列
 #define _THREAD_EXT_ 0x00
@@ -33,6 +32,21 @@ typedef long int            uint64;
 #define _UDP_PACK_PSP_ 0x00	//psp sendid //server
 #define _UDP_PACK_P2P_ 0x01	//p2p sendid
 #define _UDP_PACK_PGP_ 0x02	//发送给sendId 组		//server
+
+
+#define _TASK_LOGIN_ 1 //登录任务
+#define _TASK_LOGIN_SUCCESS_ 2
+#define _TASK_LOGIN_FAIL_ 3 //登录失败
+
+#define _TASK_QUITE_ 4 //退出登录
+#define _TASK_BACK_QUITE_ 5 //退出登录
+#define _TASK_GET_ADDR_ 6 //获取用户addr
+#define _TASK_BACK_ADDR_ 7 //返回用户addr
+#define _TASK_GET_PACK_ 8	//获取数据包,用于返回缺少那些包
+#define _TASK_BACK_PACK_ 9  //返回缺少的包
+#define _TASK_EXEIT_PACK_ 10  //包不存在
+
+
 
 
 #define _UDP_PACK_SIZE_ 1470

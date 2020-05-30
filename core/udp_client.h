@@ -8,9 +8,9 @@
 #include "udp_base.h"
 
 
-class UdpClient : public udp_base {
+class UdpClient : public UdpBase {
   public:
 	UdpClient(const char* ip, int port);
 	~UdpClient();
-}
+};
 #endif

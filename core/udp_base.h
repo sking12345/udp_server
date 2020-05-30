@@ -31,6 +31,10 @@ class UdpBase {
 	pthread_t send_thread_id;	//写数据线程
 	pthread_mutex_t send_mutex; //互斥信号量
 	pthread_cond_t send_cond;	//条件变量
+
+	pthread_mutex_t read_mutex; //互斥信号量
+	pthread_cond_t read_cond;	//条件变量
+
 	uint8 read_thread_status;	//读线程状态
 	uint8 send_thread_status;	//写线程状态
 	struct sockaddr_in server_addr;	//服务器的addr
@@ -40,8 +44,12 @@ class UdpBase {
 	std::map<uint32, std::map<uint64, struct udp_pack*> > send_map_list;	//保存发送数据的队列,用于验证数据完整性
 
 	std::map<uint32, std::map<uint64, uint8*> > recv_map_list;	//保存接受队列
-	std::map<uint32, struct udp_addr*> users_addr_map;
 
+	//保存接受包的日志记录 uint32: sequeue
+	//uint64: unique
+	std::map<uint32, std::map<uint64, std::map<uint16, uint16>  > > recv_map_log;
+
+	std::map<uint32, struct udp_addr*> users_addr_map;
 	std::list<struct udp_pack*> available_pack_list;	//可用包队列，用于包内存管理
 
   public:
@@ -55,14 +63,25 @@ class UdpBase {
 	void save_addr(struct sockaddr_in, uint32 );
 	int send_data(void*, int size, uint32 userid, uint16 task, uint8 type);
 	int send_data(struct udp_pack* pack_data, struct sockaddr_in addr);	//发送数据,
+
+	int send_data(uint8 task, uint8 type, uint32 userid = 0x00);	//发送数据,	发送任务指令
 	uint64 get_mstime();
 	int sendTo(struct udp_pack*, struct sockaddr_in addr);	//发送数据,
 	struct udp_addr *get_socket_addr(uint32);
+	struct udp_addr *get_client_addr(uint32);
+
+
 	void send_time_out(uint16 unique, uint8 task, uint8 type);	//发送超时回调
 	void recv_start();
-	void recvfrom(struct udp_pack*, struct sockaddr_in addr);		//立即回调函数
-	void recvfrom(uint8 *data, uint32 data_size, uint16 task, uint32 userid);	//接受到完整数据回调
+	void recved_data(struct udp_pack*, struct sockaddr_in addr);		//立即回调函数
+	void recved_data(uint8 *data, uint32 data_size, uint16 task, uint32 userid, uint64 unique = 0x00);	//接受到完整数据回调
+	void free_recved_data(uint32 userid); //释放某个用户的所有接受资源
+	void free_recved_data(uint32 userid, uint64 unique); //释放某个任务资源
 	void remove_socket_addr(uint32 userId);
+	int get_pack_num(int size);	//根据数据的大小，计算出会给拆分成多少个数据包
+	int confirm_end(struct udp_pack, struct sockaddr_in addr);	//确认结束某个数据包的结束
+	void send_feedback(struct udp_pack, struct sockaddr_in addr);	//发送数据的反馈
+
 
 };
 #endif

@@ -43,14 +43,16 @@ typedef long int            uint64;
 #define _TASK_GET_ADDR_ 6 //获取用户addr
 #define _TASK_BACK_ADDR_ 7 //返回用户addr
 #define _TASK_GET_PACK_ 8	//获取数据包,用于返回缺少那些包
-#define _TASK_BACK_PACK_ 9  //返回缺少的包
-#define _TASK_EXEIT_PACK_ 10  //包不存在
+#define _TASK_EXEIT_PACK_ 9  //包不存在
+#define _TASK_TEXT_ 10	//文本
+#define _TASK_END_ 11 //接受某个
+#define _TASK_USER_EXITE_ 12  //用户未登录
 
 
 
 
 #define _UDP_PACK_SIZE_ 1470
-#define _UDP_DATA_SIZE_ (_UDP_PACK_SIZE_ - sizeof(uint8)*2 - sizeof(uint32)*3 - sizeof(time_t))
+#define _UDP_DATA_SIZE_ 1440
 
 
 typedef struct udp_pack {

@@ -12,5 +12,7 @@ class UdpClient : public UdpBase {
   public:
 	UdpClient(const char* ip, int port);
 	~UdpClient();
+	void login(uint32 userid);
+	void get_user_addr(uint32 userid);
 };
 #endif

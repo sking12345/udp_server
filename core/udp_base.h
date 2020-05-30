@@ -41,7 +41,10 @@ class UdpBase {
 
 	std::list<struct udp_pack*> send_list;	//线程发送数据队列
 
-	std::map<uint32, std::map<uint64, struct udp_pack*> > send_map_list;	//保存发送数据的队列,用于验证数据完整性
+	// std::map<uint32, std::map<uint64, struct udp_pack*> > send_map_list;	//保存发送数据的队列,用于验证数据完整性
+
+	//uint64 = time*10000 +task_queue; uint16:sequeue ,udp_pack = pakc
+	std::map < uint32, std::map < uint64, std::map<uint16, struct udp_pack*> > > send_map_list;	//保存发送数据的队列,用于验证数据完整性
 
 	std::map<uint32, std::map<uint64, uint8*> > recv_map_list;	//保存接受队列
 
@@ -55,8 +58,7 @@ class UdpBase {
   public:
 	UdpBase();
 	virtual ~UdpBase();
-	int create_available_pack(int len);	//创建可用包队列
-	struct udp_pack *get_available_pack();	//获取可用包
+
 	int save_available_pack(struct udp_pack*);	//存入一个可用包,用于当数据确认接受完毕后,将数据清0x00，存入可用队列中
 	void create_read_thread(uint8 type = 0x00);	//开始创建读线程 type:0x00 包立即回调 0x01 完整包回调 0x02: 立即回调及完整包回调
 	void create_send_thread();	//开始创建写线程
@@ -77,6 +79,9 @@ class UdpBase {
 	void recved_data(uint8 *data, uint32 data_size, uint16 task, uint32 userid, uint64 unique = 0x00);	//接受到完整数据回调
 	void free_recved_data(uint32 userid); //释放某个用户的所有接受资源
 	void free_recved_data(uint32 userid, uint64 unique); //释放某个任务资源
+	void free_send_data(uint32 userid, uint64 unique);
+	void free_send_data(uint32 userid);
+	struct udp_pack* get_send_pack(uint32 userid, uint64 unique, uint16 sequeue);	//获取缺失的包
 	void remove_socket_addr(uint32 userId);
 	int get_pack_num(int size);	//根据数据的大小，计算出会给拆分成多少个数据包
 	int confirm_end(struct udp_pack, struct sockaddr_in addr);	//确认结束某个数据包的结束

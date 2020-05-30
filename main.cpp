@@ -31,7 +31,6 @@ int main() {
 	//
 	std::cout << _UDP_DATA_SIZE_ << std::endl;
 	UdpServer *base = new UdpServer(9002);
-	base->create_available_pack(100);
 	base->create_send_thread();
 	base->create_read_thread();
 	base->recv_start();

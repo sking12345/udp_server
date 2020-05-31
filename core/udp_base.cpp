@@ -16,7 +16,6 @@ void* send_thread_function(void* arg) {
 			continue;
 		}
 		struct udp_pack* send_pack = udp_base->send_list.front();
-		printf("%s\n", "xx");
 		if (send_pack->type == _UDP_PACK_P2P_) {	//	//p2p
 			struct udp_addr *user_addr = udp_base->get_client_addr(send_pack->send_id);
 			if (user_addr != NULL) {
@@ -58,6 +57,23 @@ UdpBase::UdpBase() {
 
 UdpBase::~UdpBase() {
 	printf("%s\n", "～UdpBase");
+	this->send_thread_status = _THREAD_EXT_;
+	this->read_thread_status = _THREAD_EXT_;
+	pthread_mutex_lock(&(this->send_mutex));
+	pthread_cancel(this->send_thread_id);
+	pthread_mutex_unlock(&(this->send_mutex));
+	pthread_cancel(this->read_thread_id);
+	std::map < uint64, std::map<uint16, struct udp_pack*> >::iterator send_map_list_iter;
+	for (send_map_list_iter = this->send_map_list.begin(); send_map_list_iter != this->send_map_list.end();) {
+		this->free_send_data(send_map_list_iter->first);
+	}
+	std::map<uint32, std::map<uint64, uint8*> >::iterator recv_map_list_iter;
+	for (recv_map_list_iter = this->recv_map_list.begin(); recv_map_list_iter != this->recv_map_list.end();) {
+		this->free_recved_data(recv_map_list_iter->first);
+		this->recv_map_list.erase(recv_map_list_iter++);
+	}
+
+
 }
 void UdpBase::recv_start() {
 
@@ -71,164 +87,7 @@ void UdpBase::recv_start() {
 		if (recv_num <= 0) {
 			continue;
 		}
-		uint64 unique = recv_upd_pack.time * 10000 + recv_upd_pack.unique;
-		if (recv_upd_pack.task == _TASK_LOGIN_) {	//登录保存from_id
-			Exception::save_info("loign sucess");
-			recv_upd_pack.task = _TASK_LOGIN_SUCCESS_;
-			this->save_addr(clent_addr, recv_upd_pack.from_id);
-			this->send_data(&recv_upd_pack, clent_addr);	//登录成功
-			continue;
-		} else if (recv_upd_pack.task == _TASK_LOGIN_SUCCESS_ || recv_upd_pack.task == _TASK_LOGIN_FAIL_) {	//登录保存from_id
-			this->send_feedback(recv_upd_pack, clent_addr);
-			Exception::save_info("loign status");
-			continue;
-		} else if (recv_upd_pack.task == _TASK_QUITE_) {	//退出登录
-			this->remove_socket_addr(recv_upd_pack.from_id);
-			recv_upd_pack.task = _TASK_BACK_QUITE_;
-			this->send_data(&recv_upd_pack, clent_addr);	//登录成功
-			this->send_feedback(recv_upd_pack, clent_addr);
-			continue;
-		} else if (recv_upd_pack.task == _TASK_BACK_QUITE_) {	//退出登录
-			this->send_feedback(recv_upd_pack, clent_addr);
-			this->remove_socket_addr(recv_upd_pack.from_id);
-			Exception::save_info("quit loign status");
-			continue;
-		} else if (recv_upd_pack.task == _TASK_GET_ADDR_) {
-			Exception::save_info("get user addr");
-			struct udp_addr *addr_info = this->get_client_addr(recv_upd_pack.send_id);
-			if (addr_info != NULL) {
-				recv_upd_pack.task = _TASK_BACK_ADDR_;
-				memset(recv_upd_pack.data, 0x00, _UDP_DATA_SIZE_);
-				memcpy(recv_upd_pack.data, &(addr_info->addr), sizeof(struct sockaddr_in));
-				this->send_data(&recv_upd_pack, clent_addr);
-			} else {
-				recv_upd_pack.task = _TASK_USER_EXITE_;
-				memset(recv_upd_pack.data, 0x00, _UDP_DATA_SIZE_);
-				this->send_data(&recv_upd_pack, clent_addr);
-			}
-			continue;
-		} else if (recv_upd_pack.task == _TASK_BACK_ADDR_) {	//保存返回的用户地址
-			struct sockaddr_in back_user_addr = {0x00};
-			memcpy(&back_user_addr, recv_upd_pack.data, sizeof(struct sockaddr_in));
-			this->save_addr(back_user_addr, recv_upd_pack.send_id);
-			Exception::save_info("back user addr");
-			continue;
-		} else if (recv_upd_pack.task == _TASK_GET_PACK_) {
-			uint64 unique = recv_upd_pack.time * 10000 + recv_upd_pack.unique;
-			struct udp_pack *pack_data = this->get_send_pack(recv_upd_pack.send_id, unique, recv_upd_pack.sequence);
-			this->sendTo(pack_data, clent_addr);
-			Exception::save_info("get pack");
-			continue;
-		} else if (recv_upd_pack.task == _TASK_USER_EXITE_) {
-			Exception::save_info("_TASK_USER_EXITE_");	//
-			uint64 unique = recv_upd_pack.time * 10000 + recv_upd_pack.unique;
-			this->free_send_data(recv_upd_pack.send_id, unique);
-			this->send_feedback(recv_upd_pack, clent_addr);
-			continue;
-		} else if (recv_upd_pack.task == _TASK_END_) {	//结束了某个任务的数据包发送,则需要将包,存入可用队列中
-			printf("_TASK_END_:%d\n", recv_upd_pack.unique);
-			pthread_mutex_lock(&(this->read_mutex));
-			uint64 unique = recv_upd_pack.time * 10000 + recv_upd_pack.unique;
-			this->free_send_data(recv_upd_pack.send_id, unique);
-			pthread_mutex_unlock(&(this->read_mutex));
-			continue;
-		}
-		if (this->read_type ==  0x00) {	//立即回调
-			this->recved_data(&recv_upd_pack, clent_addr);
-			printf("recvfrom read_type form:uid:%d\n", recv_upd_pack.from_id);
-			Exception::save_error("recvfrom read_type==0x00");
-			continue;
-		}
-
-		pthread_mutex_lock(&(this->read_mutex));
-		int data_pack_num = this->get_pack_num(recv_upd_pack.max_size);
-		if (data_pack_num <= 1) {
-			printf("recvfrom read_type form:uid:%d\n", recv_upd_pack.from_id);
-			// this->recved_data(recv_upd_pack.data, recv_upd_pack.max_size, recv_upd_pack.task, recv_upd_pack.from_id);
-			this->confirm_end(recv_upd_pack, clent_addr);
-			pthread_mutex_unlock(&(this->read_mutex));
-			continue;
-		}
-
-		this->recv_map_log_iter = this->recv_map_log.find(recv_upd_pack.from_id);
-		if (this->recv_map_log_iter != this->recv_map_log.end()) {
-			this->user_map_log = this->recv_map_log_iter->second;
-			this->user_map_log_iter = this->user_map_log.find(unique);
-			if (this->user_map_log_iter != this->user_map_log.end()) {
-				this->pack_map_log = this->user_map_log_iter->second;
-				if (this->pack_map_log.find(recv_upd_pack.sequence) != this->pack_map_log.end()) {
-					pthread_mutex_unlock(&(this->read_mutex));
-					continue;
-				}
-			}
-			this->pack_map_log.insert(std::pair<uint16, uint16>(recv_upd_pack.sequence, recv_upd_pack.sequence));
-			this->recv_map_log[recv_upd_pack.from_id][unique] = this->pack_map_log;
-		} else {
-			this->pack_map_log.insert(std::pair<uint16, uint16>(recv_upd_pack.sequence, recv_upd_pack.sequence));
-			this->user_map_log.insert(std::pair<uint64, std::map<uint16, uint16> >(unique, this->pack_map_log));
-			this->recv_map_log.insert(std::pair<uint32, std::map<uint64, std::map<uint16, uint16> > >(recv_upd_pack.from_id, this->user_map_log));
-		}
-
-		uint8 *recv_data = NULL;
-		this->recv_map_list_iter = this->recv_map_list.find(recv_upd_pack.from_id);
-		if (this->recv_map_list_iter == this->recv_map_list.end()) {
-			recv_data =  (uint8*)malloc(data_pack_num * _UDP_DATA_SIZE_);
-
-			this->user_recv_map_list.insert(std::pair<uint64, uint8*>(unique, recv_data));
-			this->recv_map_list.insert(std::pair<uint32, std::map<uint64, uint8*> >(recv_upd_pack.from_id, this->user_recv_map_list));
-		} else {
-			this->user_recv_map_list = this->recv_map_list_iter->second;
-			this->user_recv_map_list_iter = this->user_recv_map_list.find(unique);
-			if (this->user_recv_map_list_iter == this->user_recv_map_list.end()) {
-				recv_data =  (uint8*)malloc(data_pack_num * _UDP_DATA_SIZE_);
-				this->user_recv_map_list.insert(std::pair<uint64, uint8*>(unique, recv_data));
-				this->recv_map_list[recv_upd_pack.from_id] = this->user_recv_map_list;
-			} else {
-				recv_data = this->user_recv_map_list_iter->second;
-			}
-		}
-		memcpy(recv_data + _UDP_DATA_SIZE_ * recv_upd_pack.sequence, recv_upd_pack.data, _UDP_DATA_SIZE_);
-		pthread_mutex_unlock(&(this->read_mutex));
-
-		if (this->recv_map_log[recv_upd_pack.from_id][unique].size() == data_pack_num) {
-
-			this->recved_data(recv_data, recv_upd_pack.max_size, recv_upd_pack.task, recv_upd_pack.from_id, unique);
-			this->confirm_end(recv_upd_pack, clent_addr);
-			this->recv_map_log_iter = this->recv_map_log.find(recv_upd_pack.from_id);
-			if (this->recv_map_log_iter != this->recv_map_log.end()) {
-				this->user_map_log = this->recv_map_log_iter->second;
-				this->user_map_log_iter = this->user_map_log.find(unique);
-				if (this->user_map_log_iter != this->user_map_log.end()) {
-					this->pack_map_log = this->user_map_log_iter->second;
-					this->pack_map_log_iter = this->pack_map_log.find(recv_upd_pack.sequence);
-					if (this->pack_map_log_iter != this->pack_map_log.end()) {
-						this->pack_map_log.erase(this->pack_map_log_iter);
-					}
-					this->user_map_log.erase(this->user_map_log_iter);
-				}
-				this->recv_map_log.erase(this->recv_map_log_iter);
-			}
-		}
-
-	}
-}
-
-void UdpBase::recved_data(struct udp_pack * udp_pack, struct sockaddr_in addr) { //立即回调函数,针对服务端
-	// struct udp_addr *client_addr = this->get_client_addr(udp_pack->send_id);
-	// if (client_addr != NULL) {
-	// 	printf("udp_pack->send_id:%d\n", udp_pack->send_id);
-	// 	this->send_data(udp_pack, client_addr->addr);
-	// } else {
-	// 	// udp_pack->task = _TASK_USER_EXITE_;
-	// 	// memset(udp_pack->data, 0x00, _UDP_DATA_SIZE_);
-	// 	// this->send_data(udp_pack, addr);
-	// }
-}
-void UdpBase::recved_data(uint8 * recv_data, uint32 data_size, uint16 task, uint32 userid, uint64 unique) { //接受到完整数据回调,正对client 端
-	this->test_num++;
-	printf("unique:%d\n", this->test_num);
-	if (unique != 0x00) {
-		this->free_recved_data(userid, unique);
+		this->readable_data(recv_upd_pack, clent_addr);
 	}
 }
 
@@ -239,18 +98,15 @@ void UdpBase::free_recved_data(uint32 userid, uint64 unique) {
 		this->user_recv_map_list = this->recv_map_list_iter->second;
 		this->user_recv_map_list_iter = this->user_recv_map_list.find(unique);
 		if (this->user_recv_map_list_iter != this->user_recv_map_list.end()) {
-
 			/*----*/
 			recv_data = this->user_recv_map_list_iter->second;
 			/*----*/
 			free(recv_data);
 			recv_data = NULL;
-
 			this->user_recv_map_list.erase(this->user_recv_map_list_iter);
 		}
 		this->recv_map_list.erase(this->recv_map_list_iter);
 	}
-
 }
 struct udp_pack* UdpBase::get_send_pack(uint32 userid, uint64 unique, uint16 sequeue) {
 
@@ -261,26 +117,33 @@ void UdpBase::free_recved_data(uint32 userid) {
 	this->recv_map_list_iter = this->recv_map_list.find(userid);
 	if (this->recv_map_list_iter != this->recv_map_list.end()) {
 		this->user_recv_map_list = this->recv_map_list_iter->second;
-
 		for (this->user_recv_map_list_iter = this->user_recv_map_list.begin(); this->user_recv_map_list_iter != this->user_recv_map_list.end(); ) {
 			recv_data = this->user_recv_map_list_iter->second;
 			/*----*/
 			free(recv_data);
 			recv_data = NULL;
-
 			this->user_recv_map_list.erase(this->user_recv_map_list_iter++);
 		}
 		this->recv_map_list.erase(this->recv_map_list_iter);
 	}
-
 }
-void UdpBase::free_send_data(uint32 userid, uint64 unique) {
-	this->test_num++;
-	printf("test_num::%d\n", this->test_num);
-	this->test(userid);
-}
-void UdpBase::free_send_data(uint32 userid) {
-
+void UdpBase::free_send_data(uint64 unique) {
+	pthread_mutex_lock(&(this->send_mutex));
+	std::map < uint64, std::map<uint16, struct udp_pack*> >::iterator send_map_list_iter;
+	std::map<uint16, struct udp_pack*> send_task_pack_map;
+	std::map<uint16, struct udp_pack*>::iterator send_task_pack_map_iter;
+	send_map_list_iter = this->send_map_list.find(unique);
+	if (send_map_list_iter != this->send_map_list.end()) {
+		send_task_pack_map = send_map_list_iter->second;
+		for (send_task_pack_map_iter = send_task_pack_map.begin(); send_task_pack_map_iter != send_task_pack_map.end();) {
+			struct udp_pack* pack_data = send_task_pack_map_iter->second;
+			free(pack_data);
+			pack_data = NULL;
+			send_task_pack_map.erase(send_task_pack_map_iter++);
+		}
+		this->send_map_list.erase(send_map_list_iter);
+	}
+	pthread_mutex_unlock(&(this->send_mutex));
 }
 
 int UdpBase::send_data(struct udp_pack * pack_data, struct sockaddr_in addr) {
@@ -294,6 +157,9 @@ int UdpBase::send_data(void *send_data, int data_size, uint32 send_id, uint16 ta
 			return -1;
 		}
 	}
+	if (this->send_thread_status == _THREAD_EXT_) {	//发送线程已关闭
+		return -2;
+	}
 	int pack_num = this->get_pack_num(data_size);
 	if (this->wait_send_queue > _MAX_TASK_LIST_) {
 		Exception::save_error("wait_send_queue > max task list");
@@ -303,10 +169,6 @@ int UdpBase::send_data(void *send_data, int data_size, uint32 send_id, uint16 ta
 		this->task_queue = 0;
 	}
 	this->task_queue++;
-	this->send_map_list_iter = this->send_map_list.find(send_id);
-	if (this->send_map_list_iter == this->send_map_list.end()) {
-		this->send_user_map = this->send_map_list_iter->second;
-	}
 	std::map<uint16, struct udp_pack*> send_user_pack_map_save;
 	time_t time = this->get_mstime();
 	for (int i = 0; i < pack_num; ++i) {
@@ -330,8 +192,6 @@ int UdpBase::send_data(void *send_data, int data_size, uint32 send_id, uint16 ta
 		} else {
 			memcpy(pack_data->data, send_data, data_size % _UDP_DATA_SIZE_);
 		}
-		printf("%s\n", "dddd");
-
 		send_user_pack_map_save.insert(std::pair<uint16, struct udp_pack*>(i, pack_data));
 		pthread_mutex_lock(&(this->send_mutex));
 		this->send_list.push_back(pack_data);
@@ -339,43 +199,14 @@ int UdpBase::send_data(void *send_data, int data_size, uint32 send_id, uint16 ta
 		pthread_mutex_unlock(&(this->send_mutex));
 		pthread_cond_signal(&(this->send_cond));
 	}
-
-	pthread_mutex_lock(&(this->send_mutex));
 	uint64 unique = time * 10000 + this->task_queue;
-	this->send_user_map.insert(std::pair< uint64, std::map<uint16, struct udp_pack*> >(unique, send_user_pack_map_save));
-	this->send_map_list_iter = this->send_map_list.find(send_id);
-	if (this->send_map_list_iter == this->send_map_list.end()) {
-		this->send_map_list.insert(std::pair<uint32, std::map < uint64, std::map<uint16, struct udp_pack*> > >(send_id, this->send_user_map));
-	} else {
-		this->send_map_list[send_id] = send_user_map;
-	}
+	pthread_mutex_lock(&(this->send_mutex));
+	this->send_map_list.insert(std::pair < uint64, std::map<uint16, struct udp_pack*> >(unique, send_user_pack_map_save));
 	pthread_mutex_unlock(&(this->send_mutex));
+
 	return this->task_queue;
 }
 
-
-
-void UdpBase::test(uint32 userId) {
-	pthread_mutex_lock(&(this->send_mutex));
-	this->send_map_list_iter = this->send_map_list.find(userId);
-	if (this->send_map_list_iter != this->send_map_list.end()) {
-		this->send_user_map = this->send_map_list_iter->second;
-
-		for (this->send_user_map_iter = this->send_user_map.begin(); this->send_user_map_iter != this->send_user_map.end();) {
-			this->send_user_pack_map = this->send_user_map_iter->second;
-			for (this->send_user_pack_map_iter = this->send_user_pack_map.begin(); this->send_user_pack_map_iter != this->send_user_pack_map.end();) {
-				struct udp_pack* send_pack = this->send_user_pack_map_iter->second;
-				printf("send_pack:%p\n", send_pack);
-				free(send_pack);
-				send_pack = NULL;
-				this->send_user_pack_map.erase(this->send_user_pack_map_iter++);
-			}
-			this->send_user_map.erase(this->send_user_map_iter++);
-		}
-		this->send_map_list.erase(this->send_map_list_iter);
-	}
-	pthread_mutex_unlock(&(this->send_mutex));
-}
 
 
 
@@ -384,8 +215,6 @@ int UdpBase::send_data(uint8 task, uint8 type, uint32 userid) {
 	this->send_data((void*)send_str, strlen(send_str), userid, task, type);
 	return 1;
 }
-
-
 
 /*
  * type: 0x00： 立即转发

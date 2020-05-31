@@ -1,4 +1,5 @@
 #include <iostream>
+#include "core/udp_base.h"
 #include "core/exception.h"
 #include "core/udp_client.h"
 

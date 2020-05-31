@@ -12,6 +12,7 @@ class test {
 	virtual ~test() {
 		std::cout << "~test" << std::endl;
 	}
+	virtual void test3() {}
 };
 
 class test1 :  public test {
@@ -22,13 +23,17 @@ class test1 :  public test {
 	~test1() {
 		std::cout << "~test1" << std::endl;
 	}
+	void test3() {
+		std::cout << "~test31" << std::endl;
+	}
 };
 
 int main() {
 
-	// test1 *T = new test1();
+	// test *T = new test1();
+	// T->test3();
 	// delete T;
-	//
+
 	std::cout << _UDP_DATA_SIZE_ << std::endl;
 	UdpServer *base = new UdpServer(9002);
 	base->create_send_thread();
@@ -37,11 +42,5 @@ int main() {
 
 	delete base;
 
-
-	// exception::save_info("zxxx", __FILE__, __LINE__);
-	//
-	// UdpServer *udp_server = new UdpServer(9002);
-	// std::count << udp_server->GetMsTime() << std::endl;
-	// udp_server->Start();
 	return 0;
 }

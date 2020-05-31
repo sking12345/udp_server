@@ -13,6 +13,7 @@ class UdpClient : public UdpBase {
 	UdpClient(const char* ip, int port);
 	~UdpClient();
 	void login(uint32 userid);
-	void get_user_addr(uint32 userid);
+	void recved_data(uint8 * recv_data, uint32 data_size, uint16 task, uint32 userid, uint64 unique = 0x00);
+	void readable_data(struct udp_pack, struct sockaddr_in addr);
 };
 #endif

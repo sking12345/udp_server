@@ -22,6 +22,7 @@
 
 class UdpBase {
   public:
+	int test_num;
 	uint32 sockt_fd;
 	uint32 task_queue;
 	uint32 wait_send_queue;		//未发送成功的任务队列
@@ -55,6 +56,25 @@ class UdpBase {
 	std::map<uint32, struct udp_addr*> users_addr_map;
 	std::list<struct udp_pack*> available_pack_list;	//可用包队列，用于包内存管理
 
+
+	std::map<uint32, std::map<uint64, std::map<uint16, uint16> > >::iterator recv_map_log_iter;
+	std::map<uint64, std::map<uint16, uint16> > user_map_log;
+	std::map<uint64, std::map<uint16, uint16> >::iterator user_map_log_iter;
+	std::map<uint16, uint16> pack_map_log;
+	std::map<uint16, uint16>::iterator pack_map_log_iter;
+
+	std::map<uint32, std::map<uint64, uint8*> >::iterator recv_map_list_iter;
+	std::map<uint64, uint8*> user_recv_map_list;
+	std::map<uint64, uint8*>::iterator user_recv_map_list_iter;
+
+	/*用于释放发送缓存数据*/
+	std::map < uint32, std::map < uint64, std::map<uint16, struct udp_pack*> > >::iterator send_map_list_iter;
+	std::map < uint64, std::map<uint16, struct udp_pack*> > send_user_map;
+	std::map < uint64, std::map<uint16, struct udp_pack*> >::iterator send_user_map_iter;
+	std::map<uint16, struct udp_pack*> send_user_pack_map;
+	std::map<uint16, struct udp_pack*>::iterator send_user_pack_map_iter;
+
+
   public:
 	UdpBase();
 	virtual ~UdpBase();
@@ -86,6 +106,8 @@ class UdpBase {
 	int get_pack_num(int size);	//根据数据的大小，计算出会给拆分成多少个数据包
 	int confirm_end(struct udp_pack, struct sockaddr_in addr);	//确认结束某个数据包的结束
 	void send_feedback(struct udp_pack, struct sockaddr_in addr);	//发送数据的反馈
+
+	void test(uint32 userId);
 
 
 };

@@ -14,6 +14,7 @@ UdpServer::UdpServer(int port) {
 		Exception::save_error("bind error");
 		exit(0);
 	}
+	this->from_user_id = 0x00;
 
 }
 

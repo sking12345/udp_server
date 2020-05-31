@@ -14,7 +14,7 @@ int main() {
 	base->create_read_thread(0x01);
 	base->login(1234);
 
-	sleep(1000);
+	sleep(10000000);
 	delete base;
 
 	return 0;
